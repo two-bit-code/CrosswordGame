@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: game/Rack.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: game/Rack.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/* See README.md at the root of this distribution for copyright and
+   license information */
+/* eslint-env node, jquery */
+
+/**
+ * A Rack is a set of tiles that a player can play from. It's
+ * a 1D array of Square.
+ */
+define('game/Rack', ['game/Surface'], Surface => {
+
+	/**
+	 * A Rack is a 1-column {@link Surface}
+	 */
+	class Rack extends Surface {
+
+		/**
+		 * @param {(number|Tile[])} size a rack size, or an array
+		 * of Tile (for tests)
+		 */
+		constructor(size) {
+			super(typeof size === 'number' ? size : size.length, 1,
+				  () => '_');
+			if (typeof size !== 'number')
+				for (let tile of size)
+					this.addTile(tile);
+		}
+
+		/**
+		 * Debug
+		 */
+		toString() {
+			return `Rack ${this.tiles().join(',')}`;
+		}
+
+		/**
+		 * One dimensional
+		 * @override
+		 */
+		at(col) {
+			return super.at(col, 0);
+		}
+
+		/**
+		 * Add a Tile to the rack
+		 * @param {Tile} tile the Tile to add, must != null
+		 * @return {number} the col of the added tile (or -1
+		 * if it couldn't be placed)
+		 */
+		addTile(tile) {
+			let col = -1;
+			this.forEachEmptySquare(square => {
+				square.placeTile(tile);
+				col = square.col;
+				return true;
+			});
+			return col;
+		}
+
+		/**
+		 * Get an array of the letters currently on the rack
+		 * @return {string[]}
+		 */
+		letters() {
+			return this.tiles().map(tile => tile.letter);
+		}
+
+		/**
+		 * Find the Square that contains a Tile that can represent
+		 * the given letter.
+		 * If a letter tile can't be found, a blank will be used if there
+		 * is one.
+		 * @param {string} letter the letter to find
+		 * @return {Square} carrying a matching tile, or undefined
+		 */
+		findSquare(letter) {
+			let square;
+			this.forEachTiledSquare(sq => {
+				if (!square &amp;&amp; sq.tile.isBlank
+					|| sq.tile.letter === letter)
+					square = sq;
+			});
+
+			return square;
+		}
+
+		/**
+		 * Find and remove a tile from the rack. Will match the requested
+		 * tile within the Rack and return it.
+		 * @param {Tile} remove the Tile to remove, or null to remove any tile
+		 * @return {Tile} the removed tile
+		 */
+		removeTile(remove) {
+			const square = this.findSquare(remove.letter);
+			if (!square)
+				throw Error('Cannot find a tile on the rack for '
+							+ remove.letter);
+			const tile = square.tile;
+			tile.letter = remove.letter; // TODO: huh?
+			square.placeTile(null);
+			return tile;
+		}
+
+		/**
+		 * Shuffle tile positions within the rack
+		 * @return {Rack} this
+		 */
+		shuffle() {
+			const len = this.cols;
+			function random() {
+				return Math.floor(Math.random() * len);
+			}
+			for (let i = 0; i &lt; 16; i++) {
+				const from = this.at(random());
+				const to = this.at(random());
+				const tmp = from.tile;
+				from.tile = to.tile;
+				to.tile = tmp;
+			}
+			return this;
+		}
+
+		/**
+		 * Create the DOM for the Rack.
+		 * @param {string} idbase base of id's to uniquely identify this rack
+		 * @param {string} underlay a string of letters to use as background of
+		 * the rack squares. This is in place of a label.
+		 * @return {jQuery}
+		 */
+		createDOM(idbase, underlay) {
+			const $table = $('&lt;table class="rackTable">&lt;/table>');
+			const $tr = $(`&lt;tr>&lt;/tr>`);
+			let idx = 0;
+			this.forEachSquare(square => {
+				const $td = square.createDOM(idbase, idx);
+				if (underlay) {
+					const letter = underlay.charAt(idx);
+					$td.addClass('bgLetterContainer');
+					$td.append(`&lt;div class='bgLetter'>${letter}&lt;/div>`);
+				}
+				$tr.append($td);
+				idx++;
+			});
+			$table.append($tr);
+			this.refreshDOM();
+			return $table;
+		}
+	}
+
+	return Rack;
+});
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-dawg_compressor.html">dawg/compressor</a></li><li><a href="module-dawg_explore.html">dawg/explore</a></li><li><a href="module-design_valett.html">design/valett</a></li><li><a href="module-game_findBestPlay.html">game/findBestPlay</a></li><li><a href="module-i18n_checkTranslation.html">i18n/checkTranslation</a></li></ul><h3>Classes</h3><ul><li><a href="Board.html">Board</a></li><li><a href="BrowserPlatform.html">BrowserPlatform</a></li><li><a href="Database.html">Database</a></li><li><a href="Dictionary.html">Dictionary</a></li><li><a href="Edition.html">Edition</a></li><li><a href="FileDatabase.html">FileDatabase</a></li><li><a href="Fridge.html">Fridge</a></li><li><a href="Game.html">Game</a></li><li><a href="I18N.html">I18N</a></li><li><a href="LetterBag.html">LetterBag</a></li><li><a href="Move.html">Move</a></li><li><a href="Platform.html">Platform</a></li><li><a href="Player.html">Player</a></li><li><a href="Rack.html">Rack</a></li><li><a href="Server.html">Server</a></li><li><a href="ServerPlatform.html">ServerPlatform</a></li><li><a href="Square.html">Square</a></li><li><a href="Surface.html">Surface</a></li><li><a href="Tile.html">Tile</a></li><li><a href="Trie.html">Trie</a></li><li><a href="TrieNode.html">TrieNode</a></li><li><a href="Turn.html">Turn</a></li><li><a href="Ui.html">Ui</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.4</a> on Sat Oct 30 2021 08:44:36 GMT+0000 (Coordinated Universal Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: game/Surface.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: game/Surface.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/* See README.md at the root of this distribution for copyright and
+   license information */
+/* eslint-env amd, node, jquery */
+
+define('game/Surface', ['game/Square'], Square => {
+
+	/**
+	 * Base class of a tile holder (Rack or Board)
+	 */
+	class Surface {
+
+		/**
+		 * @param {number} cols number of columns
+		 * @param {number} rows number of rows (1 for a rack)
+		 * @param {function} type function(col, row) returning the square type
+		 */
+		constructor(cols, rows, type) {
+			/**
+			 * Number of columns on the surface
+			 * @member {number}
+			 */
+			this.cols = cols;
+			/**
+			 * Number of rows on the surface
+			 * @member {number}
+			 */
+			this.rows = rows;
+			/**
+			 * rowsXcols array of Square
+			 * @member {Square[][]}
+			 */
+			this.squares = [];
+
+			for (let i = 0; i &lt; cols; i++) {
+				const row = [];
+				for (let j = 0; j &lt; rows; j++)
+					row.push(new Square(type(i, j), this, i, j));
+				this.squares.push(row);
+			}
+		}
+
+		/**
+		 * Get the square at [col][row]
+		 */
+		at(col, row) {
+			return this.squares[col][row];
+		}
+
+		/**
+		 * Call fn(square, col, row) on every square, column major.
+		 * @param {function} fn function(Square, col, row)
+		 * Iteration will stop if fn returns true.
+		 * @return {boolean} true if fn() returns true, false otherwise
+		 */
+		forEachSquare(fn) {
+			for (let c = 0; c &lt; this.cols; c++)
+				for (let r = 0; r &lt; this.rows; r++)
+					if (fn(this.squares[c][r], c, r))
+						return true;
+			return false;
+		}
+
+		/**
+		 * Call fn(square, col, row) on every square that has a tile
+		 * @param {function} fn function(Square, col, row)
+		 * Iteration will stop if the function returns true.
+		 * @return {boolean} true if fn() returns true, false otherwise
+		 */
+		forEachTiledSquare(fn) {
+			return this.forEachSquare((square, c, r) => {
+				if (square.tile)
+					return fn(square, c, r);
+				return false;
+			});
+		}
+
+		/**
+		 * Call fn(square, col, row) on every square that has no tile.
+		 * @param {function} fn function(Square, col, row)
+		 * Iteration will stop if the function returns true.
+		 * @return {boolean} true if fn() returns true, false otherwise
+		 */
+		forEachEmptySquare(fn) {
+			return this.forEachSquare((square, c, r) => {
+				if (!square.tile)
+					return fn(square, c, r);
+				return false;
+			});
+		}
+
+		/**
+		 * Get the number of squares currently occupied by a tile
+		 * @return {number} number of occupied squares
+		 */
+		squaresUsed() {
+			let count = 0;
+			this.forEachTiledSquare(() => {
+				count++;
+				return false;
+			});
+			return count;
+		}
+
+		/**
+		 * Get a list of the tiles placed on the surface
+		 * @return {Tile[]} list of placed tiles
+		 */
+		tiles() {
+			const tiles = [];
+			this.forEachTiledSquare(square => {
+				tiles.push(square.tile);
+				return false;
+			});
+			return tiles;
+		}
+
+		/**
+		 * Remove all tiles from the surface, return a list of tiles
+		 * removed;
+		 */
+		empty() {
+			const removed = [];
+			this.forEachTiledSquare(square => {
+				removed.push(square.tile);
+				square.placeTile(null);
+			});
+			return removed;
+		}
+
+		/**
+		 * Get the total of the scoring tiles placed on the
+		 * surface
+		 * @return {number} total score
+		 */
+		score() {
+			return this.tiles().reduce((s, tile) => s + tile.score, 0);
+		}
+
+		/**
+		 * Determine if the surface is empty of tiles
+		 * @return {boolean} true if surface is empty
+		 */
+		isEmpty() {
+			return this.tiles().length === 0;
+		}
+
+		/**
+		 * Refresh the DOM for all squares
+		 */
+		refreshDOM() {
+			this.forEachSquare(s => s.refreshDOM());
+		}
+	}
+
+	return Surface;
+});
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-dawg_compressor.html">dawg/compressor</a></li><li><a href="module-dawg_explore.html">dawg/explore</a></li><li><a href="module-design_valett.html">design/valett</a></li><li><a href="module-game_findBestPlay.html">game/findBestPlay</a></li><li><a href="module-i18n_checkTranslation.html">i18n/checkTranslation</a></li></ul><h3>Classes</h3><ul><li><a href="Board.html">Board</a></li><li><a href="BrowserPlatform.html">BrowserPlatform</a></li><li><a href="Database.html">Database</a></li><li><a href="Dictionary.html">Dictionary</a></li><li><a href="Edition.html">Edition</a></li><li><a href="FileDatabase.html">FileDatabase</a></li><li><a href="Fridge.html">Fridge</a></li><li><a href="Game.html">Game</a></li><li><a href="I18N.html">I18N</a></li><li><a href="LetterBag.html">LetterBag</a></li><li><a href="Move.html">Move</a></li><li><a href="Platform.html">Platform</a></li><li><a href="Player.html">Player</a></li><li><a href="Rack.html">Rack</a></li><li><a href="Server.html">Server</a></li><li><a href="ServerPlatform.html">ServerPlatform</a></li><li><a href="Square.html">Square</a></li><li><a href="Surface.html">Surface</a></li><li><a href="Tile.html">Tile</a></li><li><a href="Trie.html">Trie</a></li><li><a href="TrieNode.html">TrieNode</a></li><li><a href="Turn.html">Turn</a></li><li><a href="Ui.html">Ui</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.4</a> on Sat Oct 30 2021 08:44:36 GMT+0000 (Coordinated Universal Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

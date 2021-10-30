@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: game/Fridge.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: game/Fridge.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/* See README.md at the root of this distribution for copyright and
+   license information */
+/* eslint-env browser, node */
+
+define('game/Fridge', () => {
+
+	/**
+	 * Simple selecting serialisation/deserialisation of a JS object
+	 * graph to stand-alone JSON. Does not handle function
+	 * references. Full restoration of objects requires class
+	 * prototypes to be passed in to thaw().
+	 * The object property prefix '_IB_' is reserved for use by this
+	 * module, and note also that fields who's names start with _ will
+	 * not be serialised.
+	 *
+	 * Note that the objects being frozen are 'interfered with' by the
+	 * addition of an _IB_ID field that indicates their 'frozen ID'.
+	 * This is a (clumsy) solution to the lack of ES7 value objects in ES6.
+	 * The frozen version (JSONified) version of objects are decorated
+	 * with fields as follows:
+	 * _IB_CN: constructor name
+	 * _IB_REF: the _IB_ID of another object being referenced
+	 * Date objects are serialised to string.
+	 */
+	class Fridge {
+
+		/**
+		 * Convert an object graph to stand-alone JSON.
+		 * @param {object} object - object to freeze
+		 * @return {object} the frozen version of the object
+		 */
+		static freeze(object) {
+			const objectsFrozen = [];
+
+			function _freeze(unfrozen) {
+				// Can't/don't want to serialise functions
+				if (typeof unfrozen === 'function')
+					return undefined;
+
+				if (!unfrozen || typeof unfrozen !== 'object')
+					return unfrozen;
+
+				try {
+					if (Object.prototype.hasOwnProperty.call(unfrozen, '_IB_ID')) {
+						// ref to a previously frozen object
+						if (unfrozen.constructor) {
+							//console.log(`Ref to ${unfrozen._IB_ID} ${unfrozen.constructor.name}`);
+							return { _IB_REF: unfrozen._IB_ID };
+						}
+					}
+				} catch (e) {
+					debugger;
+				}
+				const id = objectsFrozen.length;
+				// Working property will be removed later
+				Object.defineProperty(unfrozen, '_IB_ID', {
+					configurable: true,
+					value: id
+				});
+				objectsFrozen.push(unfrozen);
+
+				const frozen = {};
+
+				frozen._IB_ID = id;
+
+				if (unfrozen.constructor
+					&amp;&amp; unfrozen.constructor.name
+					&amp;&amp; unfrozen.constructor.name !== 'Object')
+					frozen._IB_CN = unfrozen.constructor.name;
+
+				if (frozen._IB_CN === 'Date') {
+					frozen._IB_DATA = unfrozen.getTime();
+					return frozen;
+
+				} else if (frozen._IB_CN === 'Array') {
+
+					frozen._IB_DATA = [];
+					for (let i = 0; i &lt; unfrozen.length; i++)
+						frozen._IB_DATA.push(_freeze(unfrozen[i]));
+
+				} else {
+					frozen._IB_DATA = {};
+					for (let prop in unfrozen)
+						// Exclude _* to avoid _events etc
+						if (!/^_/.test(prop))
+							frozen._IB_DATA[prop] = _freeze(unfrozen[prop]);
+				}
+				return frozen;
+			}
+
+			// Clean out temporary fields used in freezing
+			const frozen = _freeze(object);
+			for (let uf of objectsFrozen)
+				delete uf._IB_ID;
+
+			return frozen;
+		}
+
+		/**
+		 * Expand a frozen structure. During freezing, the
+		 * constructor name for each frozen object is recorded. During
+		 * thawing, that constructor name has to be mapped to a
+		 * prototype. If a useable constructor is not found, a
+		 * warning will be printed to the console.
+		 * @param {object} frozen object to thaw
+		 * @param {object[]} classes optional array of classes for
+		 * objects expected within frozen data.
+		 */
+		static thaw(object, classes) {
+			const objectsThawed = [];
+			const typeMap = {};
+
+			if (classes)
+				for (let clzz of classes)
+					typeMap[clzz.name] = clzz.prototype;
+
+			function _thaw(object) {
+				if (!object || typeof object !== 'object')
+					return object;
+
+				if (Object.prototype.hasOwnProperty.call(object, '_IB_REF')) {
+					// Reference to another object, that must already have
+					// been thawed
+					if (objectsThawed[object._IB_REF])
+						return objectsThawed[object._IB_REF];
+					throw Error(`Fridge: reference to unthawed ${object._IB_REF}`);
+				}
+
+				let thawed, thawProps = false;
+
+				if (object._IB_CN === 'Date')
+					return new Date(object._IB_DATA);
+
+				else if (object._IB_CN === 'Array')
+					thawed = object._IB_DATA.map(e => _thaw(e));
+
+				else if (object._IB_CN) {
+					const constructor = typeMap ? typeMap[object._IB_CN] : null;
+					if (constructor)
+						thawed = Object.create(constructor);
+					else {
+						console.log(`Warning: don't know how to recreate a ${object._IB_CN}`);
+						debugger;
+						thawed = {};
+					}
+					thawProps = true;
+				} else {
+					thawed = {};
+					thawProps = true;
+				}
+
+				if (Object.prototype.hasOwnProperty.call(object, '_IB_ID'))
+					objectsThawed[object._IB_ID] = thawed;
+
+				if (thawProps)
+					for (let prop in object._IB_DATA)
+						thawed[prop] = _thaw(
+							object._IB_DATA[prop], objectsThawed);
+
+				return thawed;
+			}
+
+			return _thaw(object);
+		}
+	}
+	return Fridge;
+});
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-dawg_compressor.html">dawg/compressor</a></li><li><a href="module-dawg_explore.html">dawg/explore</a></li><li><a href="module-design_valett.html">design/valett</a></li><li><a href="module-game_findBestPlay.html">game/findBestPlay</a></li><li><a href="module-i18n_checkTranslation.html">i18n/checkTranslation</a></li></ul><h3>Classes</h3><ul><li><a href="Board.html">Board</a></li><li><a href="BrowserPlatform.html">BrowserPlatform</a></li><li><a href="Database.html">Database</a></li><li><a href="Dictionary.html">Dictionary</a></li><li><a href="Edition.html">Edition</a></li><li><a href="FileDatabase.html">FileDatabase</a></li><li><a href="Fridge.html">Fridge</a></li><li><a href="Game.html">Game</a></li><li><a href="I18N.html">I18N</a></li><li><a href="LetterBag.html">LetterBag</a></li><li><a href="Move.html">Move</a></li><li><a href="Platform.html">Platform</a></li><li><a href="Player.html">Player</a></li><li><a href="Rack.html">Rack</a></li><li><a href="Server.html">Server</a></li><li><a href="ServerPlatform.html">ServerPlatform</a></li><li><a href="Square.html">Square</a></li><li><a href="Surface.html">Surface</a></li><li><a href="Tile.html">Tile</a></li><li><a href="Trie.html">Trie</a></li><li><a href="TrieNode.html">TrieNode</a></li><li><a href="Turn.html">Turn</a></li><li><a href="Ui.html">Ui</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.4</a> on Sat Oct 30 2021 08:44:36 GMT+0000 (Coordinated Universal Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

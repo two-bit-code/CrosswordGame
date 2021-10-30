@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: game/Square.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: game/Square.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/* See README.md at the root of this distribution for copyright and
+   license information */
+/* eslint-env amd, jquery */
+
+define('game/Square', ['platform'], (Platform) => {
+
+	// Map the characters in the board template to CSS classes
+	const CSS_CLASS =  {
+		M: 'Middle',
+		Q: 'QuadWord',
+		q: 'QuadLetter',
+		T: 'TripleWord',
+		t: 'TripleLetter',
+		D: 'DoubleWord',
+		d: 'DoubleLetter',
+		_: 'Normal'
+	};
+
+	/**
+	 * A square on the game board or rack. A Tile holder with some
+	 * underlying attributes; a position, an owner, and a type that
+	 * dictates the score multipliers that apply. The owner will be a
+	 * subclass of {@link Surface} (a {@link Rack} or a {@link Board})
+	 */
+	class Square {
+		/**
+		 * @param {string} type /^[QqTtSs_]$/ see {@link Board}
+		 * @param {Surface} owner the container this is in
+		 * @param {number} col 0-based column where the square is
+		 * @param {number} row 0-based row where the square is (undefined on a rack)
+		 */
+		constructor(type, owner, col, row) {
+			this.type = type;
+			this.owner = owner; // Rack or Board
+			this.col = col;
+			this.row = row;
+
+			this.letterScoreMultiplier = 1;
+			this.wordScoreMultiplier = 1;
+			this.tile = null; // Tile placed on this square
+
+			// True if the tile cannot be moved i.e. it was
+			// placed in a prior move. Locked tiles don't gather
+			// bonuses.
+			this.tileLocked = false;
+
+			// Determine score multipliers from type in the layout
+			switch (this.type) {
+			case 'd': this.letterScoreMultiplier = 2; break;
+			case 't': this.letterScoreMultiplier = 3; break;
+			case 'q': this.letterScoreMultiplier = 4; break;
+			case 'M':
+			case 'D': this.wordScoreMultiplier = 2; break;
+			case 'T': this.wordScoreMultiplier = 3; break;
+			case 'Q': this.wordScoreMultiplier = 4; break;
+			}
+		}
+
+		/**
+		 * Determine if the square has a tile or not
+		 */
+		isEmpty() {
+			return !this.tile;
+		}
+
+		/**
+		 * Place a tile on this square
+		 * @param {Tile} tile the Tile to place
+		 * @param {boolean} lockedwhether the tile is to be locekd to the square
+		 * (fixed on the board)
+		 */
+		placeTile(tile, locked) {
+			if (tile &amp;&amp; this.tile &amp;&amp; tile !== this.tile) {
+				console.log('Tile ', tile, ' over ', this.tile);
+				throw Error(`Square already occupied: ${this}`);
+			}
+
+			if (tile) {
+				tile.col = this.col;
+				if (typeof this.row !== 'undefined')
+					tile.row = this.row;
+				this.tile = tile;
+				this.tileLocked = locked;
+			} else {
+				delete this.tile;
+				delete this.tileLocked;
+			}
+
+			// Used in the UI to update the square
+			Platform.trigger('SquareChanged', [ this ]);
+		}
+
+		/**
+		 * Debug
+		 */
+		toString() {
+			// All squares have a col
+			let string = `${this.type} square @ ${this.col}`;
+			// Squares on the board have a row too
+			if (this.row >= 0)
+				string += ',' + this.row;
+
+			if (this.tile) {
+				string += ` => ${this.tile}`;
+				if (this.tileLocked)
+					string += ' (Locked)';
+			}
+			return string;
+		}
+
+		/**
+		 * Create the DOM representation
+		 */
+		createDOM(idbase, col, row) {
+			const $td = $(`&lt;td>&lt;/td>`);
+			$td.addClass(CSS_CLASS[this.type]);
+
+			let id = `${idbase}_${col}`;
+			if (typeof row !== 'undefined')
+				id += `x${row}`;
+			this.id = id;
+			const $div = $(`&lt;div id='${id}'>&lt;a>&lt;/a>&lt;/div>`);
+			// Associate the square with the div for dragging
+			$div.data('square', this);
+			$td.append($div);
+			return $td;
+		}
+
+		refreshDOM() {
+			const $div = $(`#${this.id}`)
+				.removeClass('Selected')
+				.removeClass('Temp')
+				.off('click');
+
+			if (this.tile)
+				this.refreshOccupied($div);
+			else
+				this.refreshEmpty($div);
+		}
+
+		/**
+		 * Set the square as (un)selected; UI
+		 * @param {boolean} sel 
+		 */
+		setSelected(sel) {
+			if (sel &amp;&amp; this.tile)
+				$(`#${this.id}`).addClass('Selected');
+			else
+				$(`#${this.id}`).removeClass('Selected');
+			// Unused
+			//$('#board td').removeClass('Targeted');
+			//if (!this.tile)
+			//	$(`#${this.id}`).addClass('Targeted');
+		}
+
+		/**
+		 * Update a square that has a Tile dropped on it
+		 * @param {jQuery} $div the &lt;div> for the square
+		 * @private
+		 */
+		refreshOccupied($div) {
+			if ($div.hasClass('ui-droppable'))
+				$div.droppable('destroy');
+
+			$div
+			.removeClass('Empty')
+			.addClass('Tile');
+
+			if (this.tile.isBlank)
+				$div.addClass('BlankLetter');
+
+			if (this.tileLocked) {
+				$div.addClass('Locked');
+				if ($div.hasClass('ui-draggable'))
+					$div.draggable('destroy');
+			} else {
+				// tile isn't locked, valid drag source
+				$div
+				.addClass('Temp')
+				.on('click', () => Platform.trigger('SelectSquare', [ this ]));
+
+				$div.draggable({
+					revert: 'invalid',
+					opacity: 1,
+					helper: 'clone',
+
+					start: (event, jui) => {
+						$div.css({ opacity: 0.5 });
+						// Clear selection
+						Platform.trigger('SelectSquare');
+						// Configure drag helper
+						$(jui.helper)
+						.animate({'font-size' : '120%'}, 300)
+						.addClass('dragBorder');
+					},
+
+					drag: (event, jui) => $(jui.helper).addClass('dragBorder'),
+
+					stop: () => $div.css({ opacity: 1 })
+				});
+			}
+
+			const letter = this.tile.letter;
+			const score = this.tile.score;
+			const $a = $('&lt;a>&lt;/a>');
+			$a.append(`&lt;span class='Letter'>${letter}&lt;/span>`);
+			$a.append(`&lt;span class='Score'>${score}&lt;/span>`);
+			$div.html($a);
+		}
+
+		/**
+		 * Update a square that doesn't have a Tile dropped on it
+		 * @param {jQuery} $div the &lt;div> for the square
+		 * @private
+		 */
+		refreshEmpty($div) {
+
+			// Not draggable
+			if ($div.hasClass('ui-draggable'))
+				$div.draggable('destroy');
+
+			// no tile on the square, valid drop target
+			$div
+			.removeClass('Tile')
+			.addClass('Empty');
+
+			$div.on('click', () => Platform.trigger('SelectSquare', [ this ]))
+			// Handle something dropping on us
+			.droppable({
+				hoverClass: 'dropActive',
+				drop: (event, jui) => {
+					const source = $(jui.draggable).data('square');
+					// Tell the main UI about it
+					Platform.trigger('DropSquare', [ source, this ]);
+				}
+			});
+
+			const text = $.i18n(`square-${CSS_CLASS[this.type]}`);
+
+			$div.addClass('Empty')
+			.removeClass('Tile')
+			.html(`&lt;a>${text}&lt;/a>`);
+		}
+	}		
+
+	return Square;
+});
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-dawg_compressor.html">dawg/compressor</a></li><li><a href="module-dawg_explore.html">dawg/explore</a></li><li><a href="module-design_valett.html">design/valett</a></li><li><a href="module-game_findBestPlay.html">game/findBestPlay</a></li><li><a href="module-i18n_checkTranslation.html">i18n/checkTranslation</a></li></ul><h3>Classes</h3><ul><li><a href="Board.html">Board</a></li><li><a href="BrowserPlatform.html">BrowserPlatform</a></li><li><a href="Database.html">Database</a></li><li><a href="Dictionary.html">Dictionary</a></li><li><a href="Edition.html">Edition</a></li><li><a href="FileDatabase.html">FileDatabase</a></li><li><a href="Fridge.html">Fridge</a></li><li><a href="Game.html">Game</a></li><li><a href="I18N.html">I18N</a></li><li><a href="LetterBag.html">LetterBag</a></li><li><a href="Move.html">Move</a></li><li><a href="Platform.html">Platform</a></li><li><a href="Player.html">Player</a></li><li><a href="Rack.html">Rack</a></li><li><a href="Server.html">Server</a></li><li><a href="ServerPlatform.html">ServerPlatform</a></li><li><a href="Square.html">Square</a></li><li><a href="Surface.html">Surface</a></li><li><a href="Tile.html">Tile</a></li><li><a href="Trie.html">Trie</a></li><li><a href="TrieNode.html">TrieNode</a></li><li><a href="Turn.html">Turn</a></li><li><a href="Ui.html">Ui</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.4</a> on Sat Oct 30 2021 08:44:36 GMT+0000 (Coordinated Universal Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

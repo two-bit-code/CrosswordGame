@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: design/valett.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: design/valett.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/* See README.md at the root of this distribution for copyright and
+   license information */
+
+/* eslint-env node */
+
+/**
+ * Command-line invocation of the Valett word corpus analyser
+ * Based on code from https://github.com/jmlewis/valett
+ *
+* `node js/design/valett.js` will tell you how to use it.
+ * @module
+ */
+const requirejs = require('requirejs');
+
+requirejs.config({
+	baseUrl: `${__dirname}/..`
+});
+
+requirejs(['node-getopt', 'fs-extra', 'design/ValettCore'], (Getopt, Fs, Valett) => {
+	const config = { // default config for Scrabble(R)
+		weights: {
+			frequency: .34,
+			frequencyByLength: .33,
+			entropy: .33
+		},
+		frequencyByLengthWeights: [
+			0, 50, 25, 5, 2.5, 1.25, 0.625, 25, 12.5, 2.5, 1.25
+		],
+		entropyWeights: [ .5, .5 ],
+		minPoints: 1,
+		maxPoints: 10,
+		tileCount: 98
+	};
+	
+	const DESCRIPTION = [
+		'USAGE',
+		`node ${process.argv[1].replace(/.*\//, '')} [options] &lt;wordfile>`,
+		'Analyse a set of words. Output is in the form of a bag definition',
+		'for use in an Edition.',
+		'Optional config is a JSON file allowing you to override the following:',
+		'{',
+		'minPoints: minimum point value for a tile.',
+		`\tDefault: ${config.minPoints}`,
+		'maxPoints: maximum point value for a tile.',
+		`\tDefault: ${config.maxPoints}`,
+		'tileCount: number of tiles in the initial bag, not including blanks.',
+		`\tDefault: ${config.tileCount}`,
+		'weights: relative weighting of frequency, frequency by length, and',
+		'\tentropy when calculating letter values. Fields should sum to 1.',
+		`\tDefault: ${JSON.stringify(config.weights)}`,
+		'frequencyByLengthWeights: relative value of a letter\'s occurrence',
+		'\tin words of different length. For example, in Scrabble',
+		'\tit is particularly valuable for a letter to appear in 2,',
+		'\t3, 7 and 8 tile words.',
+		`\tDefault: ${JSON.stringify(config.frequencyByLengthWeights)}`,
+		'entropyWeights: relative value of the ease of transitioning into',
+		'\ta letter (how evenly the transition probabilities toward',
+		'\ta letter are distributed) and out of a letter. For example,',
+		'\tQ has a low entropy out since its transition probability',
+		'\tdistribution is highly peaked at U.',
+		`\tDefault: [${config.entropyWeights}]`,
+		'}'
+	].join('\n');
+
+	const opt = Getopt.create([
+		['c', 'config=ARG', 'Config file (JSON) - see above']
+	])
+        .bindHelp()
+        .setHelp(`${DESCRIPTION}\nOPTIONS\n[[OPTIONS]]`)
+		.parseSystem();
+
+	if (opt.options.config) {
+		// Read config from file (JSON)
+		Fs.readFile(opt.options.config)
+		.then(data => {
+			let reconfig;
+			eval(`reconfig=${data.toString()}`);
+			console.log(`Config from ${opt.options.config}`);
+			for (let key of Object.keys(reconfig))
+				config[key] = reconfig[key];
+		});
+	}
+	console.log(opt);
+    if (opt.argv.length == 0) {
+        opt.showHelp();
+        throw 'No word corpus filename given';
+    }
+	const infile = opt.argv.shift();
+
+	console.log(`Analyse ${infile}`);
+	console.log(config);
+
+	Fs.readFile(infile)
+	.then(data => {
+		const words = data.toString().toUpperCase().split(/\r?\n/);
+		// Extract the alphabet from the corpus
+		const chars = {};
+		words.forEach(
+			w => w.split('').forEach(
+				c => chars[c] = true));
+		const letters = Object.keys(chars);
+		letters.sort();
+						  
+		const v = new Valett(words, letters); 
+		const values = v.analyze(config.maxPoints - config.minPoints,
+				  config.weights,
+				  config.frequencyByLengthWeights,
+				  config.entropyWeights);
+		let sum;
+		const count = [];
+		let factor = config.tileCount;
+		while (config.tileCount > 0) {
+			sum = 0;
+			for (let letter of letters) {
+				let n = values[v.hash[letter]].count * factor;
+				if (n &lt; 1)
+					n = 1;
+				else
+					n = Math.round(n);
+				count[letter] = n;
+				sum += n;
+			}
+			if (sum &lt;= config.tileCount)
+				break;
+			factor -= 0.01;
+		}
+		sum = 0;
+		for (let letter of letters) {
+			const score = values[v.hash[letter]].score + config.minPoints;
+			const num = count[letter];
+			sum += num;
+			console.log(`{ letter: '${letter}', score: ${score}, count: ${num} }`);
+		}
+		console.log(`Total ${sum} tiles`);
+
+	})
+	.catch(e => {
+		console.log(e);
+		console.log(DESCRIPTION.join('\n'));
+	});
+});
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-dawg_compressor.html">dawg/compressor</a></li><li><a href="module-dawg_explore.html">dawg/explore</a></li><li><a href="module-design_valett.html">design/valett</a></li><li><a href="module-game_findBestPlay.html">game/findBestPlay</a></li><li><a href="module-i18n_checkTranslation.html">i18n/checkTranslation</a></li></ul><h3>Classes</h3><ul><li><a href="Board.html">Board</a></li><li><a href="BrowserPlatform.html">BrowserPlatform</a></li><li><a href="Database.html">Database</a></li><li><a href="Dictionary.html">Dictionary</a></li><li><a href="Edition.html">Edition</a></li><li><a href="FileDatabase.html">FileDatabase</a></li><li><a href="Fridge.html">Fridge</a></li><li><a href="Game.html">Game</a></li><li><a href="I18N.html">I18N</a></li><li><a href="LetterBag.html">LetterBag</a></li><li><a href="Move.html">Move</a></li><li><a href="Platform.html">Platform</a></li><li><a href="Player.html">Player</a></li><li><a href="Rack.html">Rack</a></li><li><a href="Server.html">Server</a></li><li><a href="ServerPlatform.html">ServerPlatform</a></li><li><a href="Square.html">Square</a></li><li><a href="Surface.html">Surface</a></li><li><a href="Tile.html">Tile</a></li><li><a href="Trie.html">Trie</a></li><li><a href="TrieNode.html">TrieNode</a></li><li><a href="Turn.html">Turn</a></li><li><a href="Ui.html">Ui</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.4</a> on Sat Oct 30 2021 08:44:36 GMT+0000 (Coordinated Universal Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
