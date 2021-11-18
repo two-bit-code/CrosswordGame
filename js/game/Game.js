@@ -423,7 +423,9 @@ define('game/Game', [
 			if (!config.mail || !config.mail.transport)
 				return Promise.reject('Mail is not configured');
 
-			const url = `${serverURL}/game/${this.key}`;
+                        if (config.mail.inviteurl) 
+			        serverURL = config.mail.inviteurl;
+                        const url = `${serverURL}/game/${this.key}`;
 			const promises = [];
 			this.players.forEach(
 				player => {
@@ -452,6 +454,8 @@ define('game/Game', [
 			if (this.ended)
 				return Promise.resolve({});
 
+                        if (config.mail.inviteurl)
+                                serverURL = config.mail.inviteurl;
 			const player = this.players[this.whosTurn];
 			const url = `${serverURL}/game/${this.key}`;
 			if (player.email) {
